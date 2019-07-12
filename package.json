@@ -15,7 +15,7 @@
     "type": "git",
     "url": "https://github.com/jmcomby/webauthn-node.git"
   },
-  "license": "MIT",
+  "license": "wtfpl",
   "dependencies": {
     "@fidm/x509": "^1.2.1",
     "base64url": "^3.0.1",

@@ -6,6 +6,8 @@ Webauthn demo server in typescript based on the [FIDO Alliance javascript demo](
 
 You can quickly start the server by running
 ```shell
+git clone https://github.com/jmcomby/webauthn-node.git
+cd webauthn-node/
 npm install
 npm run tsc
 node build/app.js
@@ -22,6 +24,7 @@ If you are using Docker & Visual Studio Code (with the extension Remote - Contai
 ```shell
 git clone https://github.com/jmcomby/webauthn-node.git
 cd webauthn-node/
+npm install
 ```
 
 Open with your favorite editor.

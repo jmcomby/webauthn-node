@@ -45,7 +45,7 @@ Now you can start the server node
 node build/app.js
 ```
 By default, the server will serve the static small website (static folder) and be ready to authentify using WebAuthn.
-Navigate to `http://localhost:3001`
+Navigate to `http://localhost:3000`
 
 ## Features
 

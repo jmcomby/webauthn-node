@@ -3,9 +3,9 @@ import base64url from "base64url";
 import cbor from 'cbor';
 import elliptic from 'elliptic';
 import NodeRSA from 'node-rsa';
-import { authenticatorInfo } from './routes/db';
+import { IAuthenticatorInfo } from './models/user.model';
 import { Certificate } from '@fidm/x509';
-
+import config = require('./config.json');
 
 /**
  * @see {@link https://w3c.github.io/webauthn/#dictdef-publickeycredentialrpentity}
@@ -116,7 +116,7 @@ export function generateServerMakeCredRequest(username: string, displayName: str
         challenge: randomBase64URLBuffer(32),
 
         rp: {
-            name: "ACME Corporation"
+            name: config.organisation
         },
 
         user: {
@@ -141,7 +141,7 @@ export function generateServerMakeCredRequest(username: string, displayName: str
  * @param  {Array<authenticatorInfo>} authenticators - list of authenticators
  * @return {PKCRequestOptions}                       - server encoded make credentials request
  */
-export function generateServerGetAssertion(authenticators: Array<authenticatorInfo>) {
+export function generateServerGetAssertion(authenticators: Array<IAuthenticatorInfo>) {
     let allowCredentials = new Array<PublicKeyCredentialDescriptor>();
     for (let authr of authenticators) {
         allowCredentials.push({
@@ -289,7 +289,7 @@ function verifySignature(signature: Buffer, data: Buffer, publicKey: string) {
 
 interface verifyAuthAttestation {
     verified: boolean;
-    authrInfo: authenticatorInfo;
+    authrInfo: IAuthenticatorInfo;
 }
 
 let COSEKEYS = {
@@ -387,6 +387,8 @@ export function verifyAuthenticatorAttestationResponse(webAuthnResponse: any) {
     let attestationBuffer = base64url.toBuffer(webAuthnResponse.response.attestationObject);
     let ctapMakeCredResp = cbor.decodeAllSync(attestationBuffer)[0];
     let authrDataStruct = parseMakeCredAuthData(ctapMakeCredResp.authData);
+    let clientDataHash = hash256(base64url.toBuffer(webAuthnResponse.response.clientDataJSON));
+    let publicKey = COSEECDHAtoPKCS(authrDataStruct.COSEPublicKey);
 
     let response = <verifyAuthAttestation>{
         'verified': false
@@ -396,11 +398,8 @@ export function verifyAuthenticatorAttestationResponse(webAuthnResponse: any) {
         if (!(authrDataStruct.flags & U2F_USER_PRESENTED))
             throw new Error('User was NOT presented durring authentication!');
 
-        let clientDataHash = hash256(base64url.toBuffer(webAuthnResponse.response.clientDataJSON))
         let reservedByte = Buffer.from([0x00]);
-        let publicKey = COSEECDHAtoPKCS(authrDataStruct.COSEPublicKey)
         let signatureBase = Buffer.concat([reservedByte, authrDataStruct.rpIdHash, clientDataHash, authrDataStruct.credID, publicKey]);
-
         let PEMCertificate = ASN1toPEM(ctapMakeCredResp.attStmt.x5c[0]);
         let signature = ctapMakeCredResp.attStmt.sig;
 
@@ -419,19 +418,48 @@ export function verifyAuthenticatorAttestationResponse(webAuthnResponse: any) {
         if (!(authrDataStruct.flags & U2F_USER_PRESENTED))
             throw new Error('User was NOT presented durring authentication!');
 
-        let clientDataHash = hash256(base64url.toBuffer(webAuthnResponse.response.clientDataJSON))
-        let reservedByte = Buffer.from([0x00]);
-        let publicKey = COSEECDHAtoPKCS(authrDataStruct.COSEPublicKey)
-        let signatureBase = Buffer.concat([reservedByte, authrDataStruct.rpIdHash, clientDataHash, authrDataStruct.credID, publicKey]);
-
-
         // Verify signature attestation
         if (ctapMakeCredResp.attStmt.x5c) {
-            console.log('Check signature');
             let PEMCertificate = ASN1toPEM(ctapMakeCredResp.attStmt.x5c[0]);
             let signature = ctapMakeCredResp.attStmt.sig;
+            let issuer = Certificate.fromPEM(Buffer.from(PEMCertificate, 'utf8'));
+            
+            let field = issuer.subject.getField('OU');
+            let error = false;
+            if (!field || field.value !== 'Authenticator Attestation') {
+                console.log('Batch certificate OU MUST be set strictly to "Authenticator Attestation"!');
+                error = true;
+            }
+            field = issuer.subject.getField('CN');
+            if (!field) {
+                console.log('Batch certificate CN MUST no be empty!');
+                error = true;
+            }
+            field = issuer.subject.getField('O');
+            if (!field) {
+                console.log('Batch certificate O MUST no be empty!');
+                error = true;
+            }
+            field = issuer.subject.getField('C');
+            if (!field || field.value.length !== 2) {
+                console.log('Batch certificate C MUST be set to two character ISO 3166 code!');
+                error = true;
+            }
+            if (issuer.basicConstraintsValid) {
+                console.log('Batch certificate basic constraints CA MUST be false!');
+                // error = true; // Yubikey 5 NFC value = true!
+            }
+            if (issuer.version !== 3) {
+                console.log('Batch certificate version MUST be 3(ASN1 2)!');
+                error = true;
+            }
 
-            response.verified = verifySignature(signature, signatureBase, PEMCertificate);
+            const signatureBase = Buffer.concat([ctapMakeCredResp.authData, clientDataHash]);
+            if (!error)
+                response.verified = verifySignature(signature, signatureBase, PEMCertificate);
+        }
+        else if(ctapMakeCredResp.attStmt.ecdaaKeyId) {
+            console.log('ECDAA IS NOT SUPPORTED YET!');
         }
         else {
             // Verify SURROGATE attestation
@@ -548,7 +576,7 @@ export function verifyAuthenticatorAttestationResponse(webAuthnResponse: any) {
  * @param  {Array<authenticatorInfo>} authenticators - list of authenticators
  * @return {authenticatorInfo}               - found authenticator
  */
-function findAuthr(credID: string, authenticators: Array<authenticatorInfo>) {
+function findAuthr(credID: string, authenticators: Array<IAuthenticatorInfo>) {
     for (let authr of authenticators) {
         if (authr.credID === credID)
             return authr
@@ -577,7 +605,7 @@ interface verifyAuthAssertion {
     counter: number;
 }
 
-export function verifyAuthenticatorAssertionResponse(webAuthnResponse: any, authenticators: Array<authenticatorInfo>) {
+export function verifyAuthenticatorAssertionResponse(webAuthnResponse: any, authenticators: Array<IAuthenticatorInfo>) {
     let authr = findAuthr(webAuthnResponse.id, authenticators);
     let authenticatorData = base64url.toBuffer(webAuthnResponse.response.authenticatorData);
     let authrDataStruct = parseGetAssertAuthData(authenticatorData);

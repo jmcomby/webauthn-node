@@ -5,12 +5,13 @@
 
 version: '3'
 services:
-  webauthn:
+  webauthn-node:
+    container_name: webauthn-node
     build: 
       context: .
       dockerfile: Dockerfile
     ports:
-      - 3001:3001
+      - 3000:3000
     volumes:
       # Update this to wherever you want VS Code to mount the folder of your project
       - ..:/workspace

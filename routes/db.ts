@@ -1,15 +1,3 @@
-export let database: {[id: string] : userInfo} = {}
+import { IUserInfo } from '../models/user.model';
 
-export interface authenticatorInfo {
-    fmt: string;
-    publicKey: string;
-    counter: number;
-    credID: string;
-}
-
-export interface userInfo {
-    name: string;
-    registered: boolean;
-    id: string;
-    authenticators: Array<authenticatorInfo>;
-}
+export let database: {[id: string] : IUserInfo} = {}

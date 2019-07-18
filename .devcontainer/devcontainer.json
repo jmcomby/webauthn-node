@@ -3,7 +3,7 @@
 	"name": "Node.js (latest LTS) & TypeScript",
 	// "dockerFile": "Dockerfile",
 	"dockerComposeFile": "docker-compose.yml",
-	"service": "webauthn",
+	"service": "webauthn-node",
 	"workspaceFolder": "/workspace",
 
 	// Uncomment the next line if you want to publish any ports.

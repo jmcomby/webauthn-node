@@ -1,5 +1,5 @@
 {
     "port": 3000,
     "origin": "http://localhost:3000",
-    "organisation": "Test Org"
+    "organization": "Test Org"
 }

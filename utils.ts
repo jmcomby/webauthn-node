@@ -6,73 +6,6 @@ import NodeRSA from 'node-rsa';
 import { IAuthenticatorInfo } from './models/user.model';
 import { Certificate } from '@fidm/x509';
 import config = require('./config.json');
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#dictdef-publickeycredentialrpentity}
- */
-interface PublicKeyCredentialRpEntity {
-    id: string;
-    name: string;
-}
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#dictdef-publickeycredentialuserentity}
- */
-interface PublicKeyCredentialUserEntity {
-    id: string;
-    name: string;
-    displayName: string;
-}
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#enumdef-publickeycredentialtype}
- */
-type PublicKeyCredentialType = "public-key";
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#dictdef-publickeycredentialparameters}
- */
-interface PublicKeyCredentialParameters {
-    type: PublicKeyCredentialType;
-    alg: number;
-}
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#enum-attestation-convey}
- */
-type AttestationConveyancePreference = "none" | "indirect" | "direct";
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#enum-transport}
- */
-type AuthenticatorTransport = "usb" | "nfc" | "ble" | "internal";
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#dictdef-publickeycredentialdescriptor}
- */
-interface PublicKeyCredentialDescriptor {
-    type: PublicKeyCredentialType;
-    id: string;
-    transports?: AuthenticatorTransport[];
-}
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#enumdef-userverificationrequirement}
- */
-type UserVerificationRequirement = "required" | "preferred" | "discouraged";
-
-/**
- * @see {@link https://w3c.github.io/webauthn/#dictdef-publickeycredentialrequestoptions}
- */
-interface PublicKeyCredentialRequestOptions {
-    challenge: string;
-    timeout?: number;
-    rpId?: string;
-    allowCredentials?: PublicKeyCredentialDescriptor[];
-    userVerification?: UserVerificationRequirement;
-    extensions?: any;
-}
-
 /**
  * U2F Presence constant
  */
@@ -82,12 +15,7 @@ export interface PKCRequestOptions extends PublicKeyCredentialRequestOptions {
     status?: string;
 }
 
-export interface MakePublicKeyCredentialOptions {
-    challenge: string;
-    rp: PublicKeyCredentialRpEntity;
-    user: PublicKeyCredentialUserEntity;
-    attestation?: AttestationConveyancePreference;
-    pubKeyCredParams: Array<PublicKeyCredentialParameters>;
+export interface MakePublicKeyCredentialOptions extends PublicKeyCredentialCreationOptions {
     status?: string;
 }
 
@@ -113,23 +41,20 @@ export function randomBase64URLBuffer(len?: number) {
  */
 export function generateServerMakeCredRequest(username: string, displayName: string, id: string) {
     const options = <MakePublicKeyCredentialOptions>{
-        challenge: randomBase64URLBuffer(32),
-
+        challenge: randomBase64URLBuffer(32) as any,
         rp: {
-            name: config.organisation
+            name: config.organization
         },
-
         user: {
-            id: id,
+            displayName: displayName,
             name: username,
-            displayName: displayName
+            id: id as any
         },
-
-        attestation: 'direct',
-
+        attestation: "direct",
         pubKeyCredParams: [
             {
-                type: "public-key", alg: -7 // "ES256" IANA COSE Algorithms registry
+                type: "public-key",
+                alg: -7
             }
         ]
     }
@@ -146,12 +71,12 @@ export function generateServerGetAssertion(authenticators: Array<IAuthenticatorI
     for (let authr of authenticators) {
         allowCredentials.push({
             type: 'public-key',
-            id: authr.credID,
+            id: authr.credID as any,
             transports: ['usb', 'nfc', 'ble', 'internal']
         })
     }
     const options = <PKCRequestOptions>{
-        challenge: randomBase64URLBuffer(32),
+        challenge: randomBase64URLBuffer(32) as any,
         allowCredentials: allowCredentials
     }
     return options;
@@ -423,7 +348,7 @@ export function verifyAuthenticatorAttestationResponse(webAuthnResponse: any) {
             let PEMCertificate = ASN1toPEM(ctapMakeCredResp.attStmt.x5c[0]);
             let signature = ctapMakeCredResp.attStmt.sig;
             let issuer = Certificate.fromPEM(Buffer.from(PEMCertificate, 'utf8'));
-            
+
             let field = issuer.subject.getField('OU');
             let error = false;
             if (!field || field.value !== 'Authenticator Attestation') {
@@ -458,7 +383,7 @@ export function verifyAuthenticatorAttestationResponse(webAuthnResponse: any) {
             if (!error)
                 response.verified = verifySignature(signature, signatureBase, PEMCertificate);
         }
-        else if(ctapMakeCredResp.attStmt.ecdaaKeyId) {
+        else if (ctapMakeCredResp.attStmt.ecdaaKeyId) {
             console.log('ECDAA IS NOT SUPPORTED YET!');
         }
         else {
